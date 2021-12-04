@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace RingBufferApp
 {
@@ -8,8 +10,8 @@ namespace RingBufferApp
     /// Кольцевой буфер
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class RingBuffer<T>
-        where T: class
+    public class RingBuffer<T> : IRingBuffer<T>
+        where T : class
     {
         #region Поля
 
@@ -19,7 +21,8 @@ namespace RingBufferApp
         private T[] _items;
         private readonly Action<T> _evictedCb;
         private readonly int _capacity;
-
+        private TaskCompletionSource _taskCompletionSource;
+        private CancellationTokenRegistration _cancellationTokenRegistration;
         #endregion
 
         /// <summary>
@@ -27,7 +30,7 @@ namespace RingBufferApp
         /// </summary>
         /// <param name="capacity"></param>
         /// <param name="evictedCb"></param>
-        public RingBuffer(int capacity = 10,  Action<T> evictedCb = null)
+        public RingBuffer(int capacity = 10, Action<T> evictedCb = null)
         {
             this._capacity = capacity;
             this._evictedCb = evictedCb;
@@ -37,10 +40,10 @@ namespace RingBufferApp
         #region Свойства
 
         // вместимость буфера
-        public int capacity => this._capacity;
+        public int Capacity => this._capacity;
 
         // пустой ли буфер
-        public bool isEmpty
+        public bool IsEmpty
         {
             get
             {
@@ -52,7 +55,7 @@ namespace RingBufferApp
         }
 
         // полный ли буфер
-        public bool isFull
+        public bool IsFull
         {
             get
             {
@@ -64,11 +67,44 @@ namespace RingBufferApp
         }
 
         // текущее кол-во элементов в буфере
-        public int size => this._size;
+        public int Size => this._size;
 
         #endregion
 
         #region Методы
+
+        /// <summary>
+        /// Ожидания когда в буфере появятьса новые элементы
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public Task WaitForNewItems(CancellationToken cancellationToken = default)
+        {
+            lock (this.SyncLock)
+            {
+                if (_taskCompletionSource != null)
+                {
+                    return _taskCompletionSource.Task;
+                }
+
+                if (this.Size > 0)
+                {
+                    return Task.CompletedTask;
+                }
+
+                if (_taskCompletionSource == null)
+                {
+                    _taskCompletionSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                    if (cancellationToken != CancellationToken.None)
+                    {
+                        _cancellationTokenRegistration = cancellationToken.Register(() => _taskCompletionSource?.TrySetCanceled());
+                    }
+                }
+
+                return _taskCompletionSource.Task;
+            }
+        }
 
         // Метод возвращает запрашиваемое число элементов с начала буфера (без удаления)
         private IEnumerable<T> _peekN(int count, bool clearReturned)
@@ -118,11 +154,11 @@ namespace RingBufferApp
         }
 
         // Метод возвращает элемент с начала буфера (без удаления)
-        public T peek()
+        public T Peek()
         {
             lock (this.SyncLock)
             {
-                if (this.isEmpty)
+                if (this.IsEmpty)
                 {
                     return null;
                 }
@@ -132,17 +168,17 @@ namespace RingBufferApp
         }
 
         // Метод возвращает запрашиваемое число элементов с начала буфера (без удаления)
-        public IEnumerable<T> peekN(int count)
+        public IEnumerable<T> PeekN(int count)
         {
             return this._peekN(count, false);
         }
 
         // Метод получения элемента из буфера
-        public T deq()
+        public T Deq()
         {
             lock (this.SyncLock)
             {
-                T res = this.peek();
+                T res = this.Peek();
 
                 if (res != null)
                 {
@@ -157,7 +193,8 @@ namespace RingBufferApp
         }
 
         // Метод получения элементов из буфера
-        public IEnumerable<T> deqN(int count) {
+        public IEnumerable<T> DeqN(int count)
+        {
             lock (this.SyncLock)
             {
                 IEnumerable<T> res = this._peekN(count, true);
@@ -172,12 +209,12 @@ namespace RingBufferApp
 
         // Метод помещения элемента в буфер
         // возвращает текущий размер буфера
-        public int enq(T item)
+        public int Enq(T item)
         {
             lock (this.SyncLock)
             {
                 int end = (this._first + this._size) % this._capacity;
-                bool full = this.isFull;
+                bool full = this.IsFull;
 
                 if (full)
                 {
@@ -194,20 +231,42 @@ namespace RingBufferApp
                     this._size++;
                 }
 
+                if (_taskCompletionSource != null && this._size > 0)
+                {
+                    _taskCompletionSource.TrySetResult();
+                    _taskCompletionSource = null;
+                    _cancellationTokenRegistration.Dispose();
+                }
+
                 return this._size;
             }
         }
 
 
         // Метод удаления всех элементов из буфера
-        public void clear()
+        public void Clear(bool isDisposing = false)
         {
             lock (this.SyncLock)
             {
-                this._items = new T[this.capacity];
+                this._items = new T[this.Capacity];
                 this._first = 0;
                 this._size = 0;
+
+                if (isDisposing)
+                {
+                    if (_taskCompletionSource != null && this._size > 0)
+                    {
+                        _taskCompletionSource.TrySetCanceled();
+                        _taskCompletionSource = null;
+                        _cancellationTokenRegistration.Dispose();
+                    }
+                }
             }
+        }
+
+        public void Dispose()
+        {
+            this.Clear(true);
         }
 
         #endregion

@@ -12,17 +12,17 @@ namespace RingBufferApp
 
             for(int i = 0; i < 10; ++i)
             {
-                ringBuffer.enq(i.ToString());
+                ringBuffer.Enq(i.ToString());
             }
 
-            var peeks = ringBuffer.peekN(5);
+            var peeks = ringBuffer.PeekN(5);
 
             foreach(var p in peeks)
             {
                 Console.WriteLine($"peek: {p}");
             }
 
-            var deqs = ringBuffer.deqN(10);
+            var deqs = ringBuffer.DeqN(10);
 
             foreach (var d in deqs)
             {
@@ -32,7 +32,7 @@ namespace RingBufferApp
 
             for (int i = 0; i < 5; ++i)
             {
-                string value = ringBuffer.deq();
+                string value = ringBuffer.Deq();
                 Console.WriteLine(value?? "null");
             }
 
