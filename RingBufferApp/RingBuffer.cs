@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CrossImage.Logic.Utils
+namespace RingBufferApp
 {
     /// <summary>
     /// Кольцевой буфер
