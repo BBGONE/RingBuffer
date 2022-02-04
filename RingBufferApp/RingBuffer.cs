@@ -1,10 +1,11 @@
-﻿using System;
+﻿using CrossImage.Common.Utils;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace RingBufferApp
+namespace CrossImage.Logic.Utils
 {
     /// <summary>
     /// Кольцевой буфер
@@ -92,17 +93,28 @@ namespace RingBufferApp
                     return Task.CompletedTask;
                 }
 
-                if (_taskCompletionSource == null)
+                TaskCompletionSource taskCompletionSource = _taskCompletionSource;
+
+                if (taskCompletionSource == null)
                 {
-                    _taskCompletionSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _taskCompletionSource = taskCompletionSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
                     if (cancellationToken != CancellationToken.None)
                     {
-                        _cancellationTokenRegistration = cancellationToken.Register(() => _taskCompletionSource?.TrySetCanceled());
+                        _cancellationTokenRegistration = cancellationToken.Register(() =>
+                        {
+                            TaskCompletionSource source = null;
+                            lock (this.SyncLock)
+                            {
+                                 source = _taskCompletionSource;
+                                _taskCompletionSource = null;
+                            }
+                            source?.TrySetCanceled();
+                        });
                     }
                 }
 
-                return _taskCompletionSource.Task;
+                return taskCompletionSource.Task;
             }
         }
 
