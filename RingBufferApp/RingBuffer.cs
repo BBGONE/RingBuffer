@@ -1,5 +1,4 @@
-﻿using CrossImage.Common.Utils;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -201,6 +200,23 @@ namespace RingBufferApp
                 }
 
                 return res;
+            }
+        }
+
+        // Метод получения всех элементов из буфера
+        public IEnumerable<T> DeqAll()
+        {
+            lock (this.SyncLock)
+            {
+                int size = this._size;
+                T[] items = new T[size];
+            
+                for(int i=0; i<size; ++i)
+                {
+                    items[i] = Deq();
+                }
+
+                return items;
             }
         }
 

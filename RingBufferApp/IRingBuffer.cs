@@ -19,6 +19,7 @@ namespace RingBufferApp
 
         void Clear(bool isDisposing = false);
         T Deq();
+        IEnumerable<T> DeqAll();
         IEnumerable<T> DeqN(int count);
         int Enq(T item);
         T Peek();
