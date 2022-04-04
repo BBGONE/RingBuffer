@@ -282,7 +282,7 @@ namespace RingBufferApp
 
                 if (isDisposing)
                 {
-                    if (_taskCompletionSource != null && this._size > 0)
+                    if (_taskCompletionSource != null)
                     {
                         _taskCompletionSource.TrySetCanceled();
                         _taskCompletionSource = null;
